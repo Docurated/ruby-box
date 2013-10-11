@@ -77,6 +77,15 @@ module RubyBox
       true
     end
 
+    def collection_for(key)
+      case key
+      when 'items'
+        @raw_item['item_collection']
+      else
+        false
+      end
+    end
+
     def update_fields
       ['name', 'description']
     end

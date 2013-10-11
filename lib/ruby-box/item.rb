@@ -134,6 +134,10 @@ module RubyBox
       false
     end
 
+    def collection_for(key)
+      false
+    end
+
     private
 
     def many(key)
@@ -143,8 +147,19 @@ module RubyBox
     end
 
     def paginated(key, item_limit=100, offset=0, fields=nil)
+      fetch_remote = true
       Enumerator.new do |yielder|
-        while true
+        # respond with local items
+        local_items(key, item_limit, offset, fields).each do |entry|
+          yielder.yield(RubyBox::Item.factory(@session, entry))
+          offset += 1
+        end
+
+        if collection_for(key) and offset == collection_for(key)['total_count']
+          fetch_remote = false
+        end
+
+        while fetch_remote
           url = "#{RubyBox::API_URL}/#{resource_name}/#{id}/#{key}?limit=#{item_limit}&offset=#{offset}"
           url = "#{url}&fields=#{fields.map(&:to_s).join(',')}" if fields
           resp = @session.get( url )
@@ -155,6 +170,21 @@ module RubyBox
           break if resp['offset'].to_i + resp['limit'].to_i >= resp['total_count'].to_i
         end
       end
+    end
+
+    def local_items(key, item_limit=100, offset=0, fields=nil)
+      matching_items = []
+      collection = collection_for(key)
+      if collection
+        if fields.nil? || collection.keys & fields == fields
+          item_start = offset - collection['offset']
+          item_end = offset + item_limit
+          if collection['entries'].length > item_start
+            matching_items = collection['entries'][item_start..item_end]
+          end
+        end
+      end
+      matching_items
     end
 
     def serialize
