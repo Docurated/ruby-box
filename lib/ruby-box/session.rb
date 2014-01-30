@@ -79,8 +79,8 @@ module RubyBox
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       http.ssl_version = :SSLv3
-      http.set_debug_output($stdout)
-      
+      #http.set_debug_output($stdout)
+
       if @access_token
         request['Authorization'] = "Bearer #{@access_token.token}"
       else
@@ -94,7 +94,6 @@ module RubyBox
 
       # Got unauthorized (401) status, try to refresh the token
       if response.code.to_i == 401 and @refresh_token and retries
-        puts "Received 401, refreshing tokens"
         refresh_token(@refresh_token)
         sleep(@backoff) # try not to excessively hammer API.
 
