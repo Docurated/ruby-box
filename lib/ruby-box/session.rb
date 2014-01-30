@@ -67,7 +67,7 @@ module RubyBox
       #http.set_debug_output($stdout)
       
       if @access_token
-        request['Authorization'] = "Bearer #{@access_token.token}")
+        request['Authorization'] = "Bearer #{@access_token.token}"
       else
         request.add_field('Authorization', build_auth_header)
       end
