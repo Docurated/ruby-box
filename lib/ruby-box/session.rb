@@ -38,8 +38,9 @@ module RubyBox
     def refresh_token(refresh_token)
       refresh_access_token_obj = OAuth2::AccessToken.new(@oauth2_client, @access_token.token, {'refresh_token' => refresh_token})
       @access_token = refresh_access_token_obj.refresh!
-      @refresh_token = @access_token.refresh_token
+      @refresh_token = @access_token.refresh_token if @refresh_token
       @refresh_callback.call(@access_token.token, @refresh_token) if !@refresh_callback.nil? && @refresh_callback.lambda?
+      @access_token
     end
     
     def build_auth_header
@@ -66,13 +67,13 @@ module RubyBox
       #http.set_debug_output($stdout)
       
       if @access_token
-        request.add_field('Authorization', "Bearer #{@access_token.token}")
+        request['Authorization'] = "Bearer #{@access_token.token}")
       else
         request.add_field('Authorization', build_auth_header)
       end
 
-      request.add_field('As-User', @as_user) if @as_user
-      request.add_field('On-Behalf-Of', @behalf_of) if @behalf_of
+      request['As-User'] = @as_user if @as_user
+      request['On-Behalf-Of'] = @behalf_of if @behalf_of
 
       response = http.request(request)
 
