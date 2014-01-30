@@ -62,8 +62,20 @@ module RubyBox
       resp = request( uri, request, raw )
     end
     
-    def request(uri, request, raw=false, retries=0)
+    def request(uri, request, raw=false, retries=true)
 
+      response = request_retry(uri, request, raw, retries)
+
+      if response.is_a? Net::HTTPNotFound
+        raise RubyBox::ObjectNotFound
+      end
+
+      sleep(@backoff) # try not to excessively hammer API.
+
+      handle_errors( response, raw )
+    end
+
+    def request_retry(uri, request, raw, retries)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       http.ssl_version = :SSLv3
@@ -80,20 +92,16 @@ module RubyBox
 
       response = http.request(request)
 
-      if response.is_a? Net::HTTPNotFound
-        raise RubyBox::ObjectNotFound
-      end
-
       # Got unauthorized (401) status, try to refresh the token
-      if response.code.to_i == 401 and @refresh_token and retries == 0
+      if response.code.to_i == 401 and @refresh_token and retries
         puts "Received 401, refreshing tokens"
         refresh_token(@refresh_token)
-        request(uri, request, raw, retries + 1)
+        sleep(@backoff) # try not to excessively hammer API.
+
+        request_retry(uri, request, raw, false)
+      else
+        response
       end
-
-      sleep(@backoff) # try not to excessively hammer API.
-
-      handle_errors( response, raw )
     end
 
     def do_stream(url, opts)
