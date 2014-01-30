@@ -38,8 +38,11 @@ module RubyBox
     def refresh_token(refresh_token)
       refresh_access_token_obj = OAuth2::AccessToken.new(@oauth2_client, @access_token.token, {'refresh_token' => refresh_token})
       @access_token = refresh_access_token_obj.refresh!
-      @refresh_token = @access_token.refresh_token if @refresh_token
-      @refresh_callback.call(@access_token.token, @refresh_token) if !@refresh_callback.nil? && @refresh_callback.lambda?
+
+      new_refresh_token = @access_token.refresh_token 
+      @refresh_token = new_refresh_token if @refresh_token
+      @refresh_callback.call(@access_token.token, new_refresh_token) if !@refresh_callback.nil? && @refresh_callback.lambda?
+
       @access_token
     end
     
@@ -64,7 +67,7 @@ module RubyBox
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       http.ssl_version = :SSLv3
-      #http.set_debug_output($stdout)
+      http.set_debug_output($stdout)
       
       if @access_token
         request['Authorization'] = "Bearer #{@access_token.token}"
@@ -83,6 +86,7 @@ module RubyBox
 
       # Got unauthorized (401) status, try to refresh the token
       if response.code.to_i == 401 and @refresh_token and retries == 0
+        puts "Received 401, refreshing tokens"
         refresh_token(@refresh_token)
         request(uri, request, raw, retries + 1)
       end
