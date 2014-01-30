@@ -19,6 +19,7 @@ module RubyBox
         @refresh_token = opts[:refresh_token]
         @as_user = opts[:as_user]
         @behalf_of = opts[:behalf_of]
+        @refresh_callback = opts[:refresh_callback]
       else # Support legacy API for historical reasons.
         @api_key = opts[:api_key]
         @auth_token = opts[:auth_token]
@@ -37,6 +38,8 @@ module RubyBox
     def refresh_token(refresh_token)
       refresh_access_token_obj = OAuth2::AccessToken.new(@oauth2_client, @access_token.token, {'refresh_token' => refresh_token})
       @access_token = refresh_access_token_obj.refresh!
+      @refresh_token = @access_token.refresh_token
+      @refresh_callback.call(@access_token.token, @refresh_token) if !@refresh_callback.nil? && @refresh_callback.lambda?
     end
     
     def build_auth_header
