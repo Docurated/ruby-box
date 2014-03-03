@@ -20,6 +20,8 @@ module RubyBox
         @as_user = opts[:as_user]
         @behalf_of = opts[:behalf_of]
         @refresh_callback = opts[:refresh_callback]
+        @refresh_lock = opts[:refresh_lock]
+        @get_tokens = opts[:get_tokens]
       else # Support legacy API for historical reasons.
         @api_key = opts[:api_key]
         @auth_token = opts[:auth_token]
@@ -35,17 +37,28 @@ module RubyBox
       @access_token = @oauth2_client.auth_code.get_token(code)
     end
 
-    def refresh_token(refresh_token)
+    def refresh_token(refresh_token, lock=nil)
       refresh_access_token_obj = OAuth2::AccessToken.new(@oauth2_client, @access_token.token, {'refresh_token' => refresh_token})
       @access_token = refresh_access_token_obj.refresh!
 
       new_refresh_token = @access_token.refresh_token 
       @refresh_token = new_refresh_token if @refresh_token
-      @refresh_callback.call(@access_token.token, new_refresh_token) if !@refresh_callback.nil? && @refresh_callback.lambda?
+      @refresh_callback.call(@access_token.token, new_refresh_token, lock) if !@refresh_callback.nil? && @refresh_callback.lambda?
 
       @access_token
     end
-    
+
+    def refresh_token_with_lock(refresh)
+      lock = @refresh_lock.call
+      if !lock.nil?
+        refresh_token(refresh, lock)
+      elsif !@get_tokens.nil? && @get_tokens.lambda?
+        refresh, access = @get_tokens.call
+        @access_token = OAuth2::AccessToken.new(@oauth2_client, access) if @access_token
+        @refresh_token = refresh if @refresh_token
+      end
+    end
+
     def build_auth_header
       "BoxAuth api_key=#{@api_key}&auth_token=#{@auth_token}"
     end
@@ -94,7 +107,12 @@ module RubyBox
 
       # Got unauthorized (401) status, try to refresh the token
       if response.code.to_i == 401 and @refresh_token and retries
-        refresh_token(@refresh_token)
+        if !@refresh_lock.nil? && @refresh_lock.lambda?
+          refresh_token_with_lock(@refresh_token)
+        else
+          refresh_token(@refresh_token)
+        end
+
         sleep(@backoff) # try not to excessively hammer API.
 
         request_retry(uri, request, raw, false)
