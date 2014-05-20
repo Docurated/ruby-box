@@ -26,6 +26,11 @@ module RubyBox
         @api_key = opts[:api_key]
         @auth_token = opts[:auth_token]
       end
+
+      if opts[:log_path]
+        @log = Logger.new(opts[:log_path], 'daily')
+        @log.formatter = -> severity, datetime, progname, msg { "#{ severity } #{ datetime.strftime("%Y-%m-%d %H:%M:%S.%6N %z") } RubyBox::Session #{msg}\n" }
+      end
     end
 
     def authorize_url(redirect_uri)
@@ -43,16 +48,20 @@ module RubyBox
 
       new_refresh_token = @access_token.refresh_token 
       @refresh_token = new_refresh_token if @refresh_token
+      @log.debug("Refresh token request returned access token #{ @access_token.token } and refresh token #{ new_refresh_token } for lock #{ lock }") if @log
       @refresh_callback.call(@access_token.token, new_refresh_token, lock) if !@refresh_callback.nil? && @refresh_callback.lambda?
 
       @access_token
     end
 
     def refresh_token_with_lock(refresh)
+      @log.debug("Request refresh token lock") if @log
       lock = @refresh_lock.call
       if !lock.nil?
+        @log.debug("Received refresh token lock #{ lock }, making oauth request") if @log
         refresh_token(refresh, lock)
       elsif !@get_tokens.nil? && @get_tokens.lambda?
+        @log.debug("Failed to get refresh token lock, trying to reload from database") if @log
         refresh, access = @get_tokens.call
         @access_token = OAuth2::AccessToken.new(@oauth2_client, access) if @access_token
         @refresh_token = refresh if @refresh_token
