@@ -28,8 +28,9 @@ module RubyBox
       end
 
       if opts[:log_path]
+        @service_email = opts[:service_email]
         @log = Logger.new(opts[:log_path], 'daily')
-        @log.formatter = -> severity, datetime, progname, msg { "#{ severity } #{ datetime.strftime("%Y-%m-%d %H:%M:%S.%6N %z") } RubyBox::Session #{msg}\n" }
+        @log.formatter = -> severity, datetime, progname, msg { "#{ severity } #{ datetime.strftime("%Y-%m-%d %H:%M:%S.%6N %z") } RubyBox::Session #{@service_email} #{msg}\n" }
       end
     end
 
