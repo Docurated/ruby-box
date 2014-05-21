@@ -85,7 +85,7 @@ module RubyBox
       resp = request( uri, request, raw )
     end
     
-    def request(uri, request, raw=false, retries=true)
+    def request(uri, request, raw=false, retries=0)
 
       response = request_retry(uri, request, raw, retries)
 
@@ -116,8 +116,13 @@ module RubyBox
       response = http.request(request)
 
       # Got unauthorized (401) status, try to refresh the token
-      if response.code.to_i == 401 and @refresh_token and retries
-        if !@refresh_lock.nil? && @refresh_lock.lambda?
+      if response.code.to_i == 401 and @refresh_token and retries < 2
+        if retries == 0 && !@get_tokens.nil? && @get_tokens.lambda?
+          @log.debug("Request was unauthorized, trying to reload tokens from database") if @log
+          refresh, access = @get_tokens.call
+          @access_token = OAuth2::AccessToken.new(@oauth2_client, access) if @access_token
+          @refresh_token = refresh if @refresh_token
+        elsif !@refresh_lock.nil? && @refresh_lock.lambda?
           refresh_token_with_lock(@refresh_token)
         else
           refresh_token(@refresh_token)
@@ -125,7 +130,7 @@ module RubyBox
 
         sleep(@backoff) # try not to excessively hammer API.
 
-        request_retry(uri, request, raw, false)
+        request_retry(uri, request, raw, retries + 1)
       else
         response
       end
@@ -166,7 +171,7 @@ module RubyBox
       case status / 100
       when 3
         # 302 Found. We should return the url
-        parsed_body["location"] = response["Location"] if status == 302                  
+        parsed_body["location"] = response["Location"] if status == 302
       when 4
         raise(RubyBox::ItemNameInUse.new(parsed_body, status, body), parsed_body["message"]) if parsed_body["code"] == "item_name_in_use"
         raise(RubyBox::AuthError.new(parsed_body, status, body), parsed_body["message"]) if parsed_body["code"] == "unauthorized" || status == 401
