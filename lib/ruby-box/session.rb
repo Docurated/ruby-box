@@ -13,19 +13,14 @@ module RubyBox
 
       @backoff = backoff # try not to excessively hammer API.
 
-      if opts[:client_id]
-        @oauth2_client = OAuth2::Client.new(opts[:client_id], opts[:client_secret], OAUTH2_URLS.dup)
-        @access_token = OAuth2::AccessToken.new(@oauth2_client, opts[:access_token]) if opts[:access_token]
-        @refresh_token = opts[:refresh_token]
-        @as_user = opts[:as_user]
-        @behalf_of = opts[:behalf_of]
-        @refresh_callback = opts[:refresh_callback]
-        @refresh_lock = opts[:refresh_lock]
-        @get_tokens = opts[:get_tokens]
-      else # Support legacy API for historical reasons.
-        @api_key = opts[:api_key]
-        @auth_token = opts[:auth_token]
-      end
+      @oauth2_client = OAuth2::Client.new(opts[:client_id], opts[:client_secret], OAUTH2_URLS.dup)
+      @access_token = OAuth2::AccessToken.new(@oauth2_client, opts[:access_token]) if opts[:access_token]
+      @refresh_token = opts[:refresh_token]
+      @as_user = opts[:as_user]
+      @behalf_of = opts[:behalf_of]
+      @refresh_callback = opts[:refresh_callback]
+      @refresh_lock = opts[:refresh_lock]
+      @get_tokens = opts[:get_tokens]
 
       if opts[:log_path]
         @service_email = opts[:service_email]
@@ -45,12 +40,15 @@ module RubyBox
 
     def refresh_token(refresh_token, lock=nil)
       refresh_access_token_obj = OAuth2::AccessToken.new(@oauth2_client, @access_token.token, {'refresh_token' => refresh_token})
-      @access_token = refresh_access_token_obj.refresh!
-
-      new_refresh_token = @access_token.refresh_token 
-      @refresh_token = new_refresh_token if @refresh_token
-      @log.debug("Refresh token request returned access token #{ @access_token.token } and refresh token #{ new_refresh_token } for lock #{ lock }") if @log
-      @refresh_callback.call(@access_token.token, new_refresh_token, lock) if !@refresh_callback.nil? && @refresh_callback.lambda?
+      new_access_token = refresh_access_token_obj.refresh!
+      new_refresh_token = new_access_token.refresh_token 
+      if @refresh_callback.call(new_access_token.token, new_refresh_token, lock)
+          @log.debug("Refresh token request returned access token #{ new_access_token.token } and refresh token #{ new_refresh_token } for lock #{ lock }") if @log
+          @access_token = new_access_token
+          @refresh_token = new_refresh_token
+      else
+          @log.error("Failed to save refreshed tokens to database #{ new_access_token.token } and refresh token #{ new_refresh_token } for lock #{ lock }") if @log
+      end
 
       @access_token
     end
@@ -61,12 +59,16 @@ module RubyBox
       if !lock.nil?
         @log.debug("Received refresh token lock #{ lock }, making oauth request") if @log
         refresh_token(refresh, lock)
-      elsif !@get_tokens.nil? && @get_tokens.lambda?
+      else
         @log.debug("Failed to get refresh token lock, trying to reload from database") if @log
-        refresh, access = @get_tokens.call
-        @access_token = OAuth2::AccessToken.new(@oauth2_client, access) if @access_token
-        @refresh_token = refresh if @refresh_token
+        reload_tokens
       end
+    end
+
+    def reload_tokens
+        refresh, access = @get_tokens.call
+        @access_token = OAuth2::AccessToken.new(@oauth2_client, access)
+        @refresh_token = refresh
     end
 
     def build_auth_header
@@ -117,15 +119,11 @@ module RubyBox
 
       # Got unauthorized (401) status, try to refresh the token
       if response.code.to_i == 401 and @refresh_token and retries < 2
-        if retries == 0 && !@get_tokens.nil? && @get_tokens.lambda?
+        if retries == 0
           @log.debug("Request was unauthorized, trying to reload tokens from database") if @log
-          refresh, access = @get_tokens.call
-          @access_token = OAuth2::AccessToken.new(@oauth2_client, access) if @access_token
-          @refresh_token = refresh if @refresh_token
-        elsif !@refresh_lock.nil? && @refresh_lock.lambda?
-          refresh_token_with_lock(@refresh_token)
+          reload_tokens
         else
-          refresh_token(@refresh_token)
+          refresh_token_with_lock(@refresh_token)
         end
 
         sleep(@backoff) # try not to excessively hammer API.
