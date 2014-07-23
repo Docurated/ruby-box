@@ -3,8 +3,16 @@ module RubyBox
 
     has_many :comments
 
-    def download
-      resp = stream.read
+    def download fout=nil
+      if fout.nil?
+        resp = stream.read
+      else
+        open(download_url, {}) do |fin|
+          while (buf = fin.read(8192))
+            fout.write buf
+          end
+        end
+      end
     end
 
     def download_url
