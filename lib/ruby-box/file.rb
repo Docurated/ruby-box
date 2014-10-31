@@ -92,7 +92,11 @@ module RubyBox
 
     private
     def file_content_url
-      "#{RubyBox::API_URL}/#{resource_name}/#{id}/content"
+        if @raw_item['version'].nil?
+            "#{RubyBox::API_URL}/#{resource_name}/#{id}/content"
+        else
+            "#{RubyBox::API_URL}/#{resource_name}/#{id}/content?version=#{@raw_item['version']}"
+        end
     end
     
 
