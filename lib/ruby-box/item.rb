@@ -70,7 +70,7 @@ module RubyBox
     end
 
     def method_missing(method, *args, &block)
-      key = method.to_s
+        key = method.to_s
 
       # Support has many and paginated has many relationships.
       return many(key) if @@has_many.include?(key)

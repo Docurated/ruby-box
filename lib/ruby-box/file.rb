@@ -1,7 +1,7 @@
 module RubyBox
   class File < Item
 
-    has_many :comments
+      has_many :comments, :versions
 
     def download fout=nil
       if fout.nil?
@@ -80,6 +80,14 @@ module RubyBox
           'item' => {'id' => id, 'type' => type},
           'message' => message
       }).create
+    end
+
+    def create_version(message)
+        RubyBox::Version.new(
+            @session, {
+                'item' => {'id' => id, 'type' => type},
+                'message' => message
+            }).create
     end
 
     private
