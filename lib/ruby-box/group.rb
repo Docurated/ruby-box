@@ -1,7 +1,7 @@
 module RubyBox
   class Group < Item
 
-    has_many :memberships
+    has_many_paginated :memberships
 
     def add_membership member, role="member"
       uri = URI.parse( "#{RubyBox::API_URL}/group_memberships" )
