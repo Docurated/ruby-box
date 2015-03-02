@@ -113,7 +113,7 @@ module RubyBox
 
       request['As-User'] = @as_user if @as_user
       request['On-Behalf-Of'] = @behalf_of if @behalf_of
-      request['Box-Notifications'] = :off
+      #request['Box-Notifications'] = :off
 
       response = http.request(request)
 
